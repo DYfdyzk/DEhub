@@ -1,41 +1,312 @@
-# Compiled Lua sources
-luac.out
+ocal Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local whitelist = {
+    [123456789]  = true,
+    [987654321]  = true,
+    [3169390783] = true,
+}
 
-# luarocks build files
-*.src.rock
-*.zip
-*.tar.gz
+-- 不在名单直接封门
+if not whitelist[player.UserId] then
+    -- 如果 GUI 已经创建，直接干掉
+    local sg = player:WaitForChild("PlayerGui"):FindFirstChild("DarkElfHub")
+    if sg then sg:Destroy() end
+    -- 阻止后面所有逻辑
+    return
+end
 
-# Object files
-*.o
-*.os
-*.ko
-*.obj
-*.elf
+local CoreGui = game:GetService("CoreGui")
+local UIS     = game:GetService("UserInputService")
+local RunSvc  = game:GetService("RunService")
 
-# Precompiled Headers
-*.gch
-*.pch
+--<<<<<<<<<<<<<<<<  1. 库主体  >>>>>>>>>>>>>>>>>>
+local DarkElfHub = {
+    Theme = {
+        WinBg    = Color3.fromRGB(45,45,45),
+        Stroke   = Color3.fromRGB(65,65,65),
+        TabBg    = Color3.fromRGB(40,40,40),
+        TabActive= Color3.fromRGB(65,150,255),
+        Text     = Color3.fromRGB(245,245,245)
+    },
+    Instances = {},
+    Tabs      = {},
+    CurrentTab= nil,
+    BossLocks = {},
+    EggLocks  = {}
+}
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-*.def
-*.exp
+--<<<<<<<<<<<<<<<<  2. 快速创建  >>>>>>>>>>>>>>>>>>
+local function new(class,props)
+    local o = Instance.new(class)
+    for k,v in pairs(props) do o[k] = v end
+    return o
+end
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+--<<<<<<<<<<<<<<<<  3. 标签页切换  >>>>>>>>>>>>>>>>>>
+function DarkElfHub:SwitchTab(tab)
+    if self.CurrentTab == tab then return end
+    if self.CurrentTab then
+        self.CurrentTab.Content.Visible = false
+        self.CurrentTab.Button.BackgroundColor3 = self.Theme.TabBg
+    end
+    tab.Content.Visible = true
+    tab.Button.BackgroundColor3 = self.Theme.TabActive
+    self.CurrentTab = tab
+end
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+--<<<<<<<<<<<<<<<<  4. 创建标签  >>>>>>>>>>>>>>>>>>
+function DarkElfHub:Tab(name)
+    local tab = {}
+    tab.Button = new("TextButton",{
+        Text = name, Size = UDim2.new(0,80,0,22),
+        BackgroundColor3 = self.Theme.TabBg, TextColor3 = self.Theme.Text,
+        BorderSizePixel = 0, Parent = self.Instances.TabBar,
+        TextSize = 10, Font = Enum.Font.SourceSans
+    })
+    tab.Content = new("Frame",{
+        Size = UDim2.new(1,0,1,-49), Position = UDim2.fromOffset(0,49),
+        BackgroundTransparency = 1, Visible = false,
+        Parent = self.Instances.Window
+    })
+    table.insert(self.Tabs, tab)
+    if not self.CurrentTab then self:SwitchTab(tab) end
+    tab.Button.MouseButton1Click:Connect(function() self:SwitchTab(tab) end)
+    return tab.Content
+end
+
+--<<<<<<<<<<<<<<<<  5. 拖拽支持（标题栏整行）  >>>>>>>>>>>>>>>>>>
+function DarkElfHub:EnableDrag(handle)
+    local drag,Input,start,startPos
+    handle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = true; Input = inp; start = inp.Position; startPos = handle.Parent.Position
+        end
+    end)
+    UIS.InputChanged:Connect(function(inp)
+        if inp == Input and drag then
+            local delta = inp.Position - start
+            handle.Parent.Position = UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,
+                                                startPos.Y.Scale,startPos.Y.Offset+delta.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(inp)
+        if inp == Input then drag = false end
+    end)
+end
+
+--<<<<<<<<<<<<<<<<  6. 初始化主窗口（400×175）  >>>>>>>>>>>>>>>>>>
+function DarkElfHub:Init()
+    local sg = new("ScreenGui",{Name="DarkElfHub",Parent=CoreGui})
+    self.Instances.ScreenGui = sg
+
+    local win = new("Frame",{
+        Name = "Window", Parent = sg,
+        Size = UDim2.fromOffset(400,175), Position = UDim2.fromOffset(200,80),
+        BackgroundColor3 = self.Theme.WinBg,
+        BorderSizePixel = 0, ClipsDescendants = true
+    })
+    new("UICorner",{CornerRadius=UDim.new(0,6),Parent=win})
+    new("UIStroke",{Thickness=2,Color=self.Theme.Stroke,Parent=win})
+    self.Instances.Window = win
+
+    -- 标题栏
+    local top = new("Frame",{Size=UDim2.new(1,0,0,25),BackgroundTransparency=1,Parent=win})
+    new("TextLabel",{
+        Text = "Dark Elf Hub", Size = UDim2.new(1,-70,1,0),
+        Position = UDim2.fromOffset(5,0), BackgroundTransparency = 1,
+        TextColor3 = self.Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.SourceSans, TextSize = 12, Parent = top
+    })
+    self:EnableDrag(top)
+
+    -- 关闭按钮
+    local close = new("TextButton",{
+        Text = "✕", Size = UDim2.fromOffset(20,20), Position = UDim2.new(1,-24,0,2),
+        BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextSize = 16, Parent = top
+    })
+    close.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+    -- 最小化按钮
+    local minimize = new("TextButton",{
+        Text = "−", Size = UDim2.fromOffset(20,20), Position = UDim2.new(1,-48,0,2),
+        BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextSize = 18, Parent = top
+    })
+
+    -- 小黑球贴图
+    local orb = new("ImageButton",{
+    Name = "Orb", Parent = sg,
+    Size = UDim2.fromOffset(40,40),
+    Position = UDim2.fromScale(.5,.5), AnchorPoint = Vector2.new(.5,.5),
+    -- 关键修正 ↓↓↓
+    BackgroundTransparency = 1,                     -- 完全透明
+    -- BackgroundColor3 = Color3.new(0,0,0),        -- 这行可删掉
+    BorderSizePixel = 0,
+    Image = "rbxassetid://126648994738185",         -- 你的图
+    Visible = false, Active = true, Draggable = true
+})
+
+
+    -- 最小化逻辑
+    local isMin = false
+    local function setMinimized(min)
+        isMin = min
+        win.Visible = not min
+        orb.Visible = min
+    end
+    minimize.MouseButton1Click:Connect(function() setMinimized(true) end)
+    orb.MouseButton1Click:Connect(function() setMinimized(false) end)
+
+    -- 标签栏
+    local tabBar = new("Frame",{Size=UDim2.new(1,0,0,22),Position=UDim2.fromOffset(0,22),BackgroundTransparency=1,Parent=win})
+    new("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,2),Parent=tabBar})
+    self.Instances.TabBar = tabBar
+
+    print("[Dark Elf Hub] 400×175 ready")
+end
+
+--<<<<<<<<<<<<<<<<  7. 运行  >>>>>>>>>>>>>>>>>>
+DarkElfHub:Init()
+
+--<<<<<<<<<<<<<<<<  8. 默认标签页  >>>>>>>>>>>>>>>>>>
+local home     = DarkElfHub:Tab("Home")
+local settings = DarkElfHub:Tab("Settings")
+local bossTab  = DarkElfHub:Tab("Auto Boss")
+local trainTab = DarkElfHub:Tab("Auto Train")
+local eggTab   = DarkElfHub:Tab("Auto Egg")
+
+--<<<<<<<<<<<<<<<<  9. Home 页  >>>>>>>>>>>>>>>>>>
+new("TextLabel",{Text="Server Info",TextSize=12,Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,TextColor3=Color3.new(1,1,1),Parent=home})
+local tickLbl = new("TextLabel",{Text="Tick: 0",TextSize=9,Size=UDim2.new(1,0,0,12),Position=UDim2.fromOffset(5,18),BackgroundTransparency=1,TextColor3=Color3.new(1,1,1),Parent=home})
+local joinLbl = new("TextLabel",{Text="Join: "..os.date("%m-%d %H:%M",Player:GetAttribute("JoinTime") or os.time()),TextSize=9,Size=UDim2.new(1,0,0,12),Position=UDim2.fromOffset(5,30),BackgroundTransparency=1,TextColor3=Color3.new(1,1,1),Parent=home})
+RunSvc.Heartbeat:Connect(function() tickLbl.Text=("Tick: %.1f"):format(workspace.DistributedGameTime) end)
+
+--<<<<<<<<<<<<<<<<  10. Settings 页  >>>>>>>>>>>>>>>>>>
+new("TextButton",{Text="Demo",Size=UDim2.new(0,60,0,16),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),TextSize=9,Parent=settings})
+
+--<<<<<<<<<<<<<<<<  11. Auto Boss 页：左侧三按钮 + 右侧 3×3 网格选择  >>>>>>>>>>>>>>>>>>
+local currentBoss = "ApprenticeMiner"
+
+-- 左侧按钮容器
+local leftPanel = new("Frame",{Size=UDim2.new(0,90,0,120),Position=UDim2.fromOffset(5,25),BackgroundTransparency=1,Parent=bossTab})
+new("UIListLayout",{Padding=UDim.new(0,10),Parent=leftPanel})
+
+local selectBossBtn = new("TextButton",{Text="选择 Boss",Size=UDim2.new(0,80,0,22),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=10,Parent=leftPanel})
+local autoClickBtn  = new("TextButton",{Text="Auto Click: OFF",Size=UDim2.new(0,80,0,22),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=10,Parent=leftPanel})
+local autoBossBtn   = new("TextButton",{Text="Auto Boss: OFF",Size=UDim2.new(0,80,0,22),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=10,Parent=leftPanel})
+
+-- 右侧 3×3 展开区
+local expandFrame = new("Frame",{
+    Size = UDim2.fromOffset(20*28 + 2*2, 3*28 + 2*2),  -- 横向长度在这里
+    Position = UDim2.fromOffset(105,25),
+    BackgroundTransparency = 1, Visible = false, Parent = bossTab
+})
+
+new("UIGridLayout",{
+    CellSize=UDim2.fromOffset(28,28),CellPadding=UDim2.fromOffset(2,2),
+    FillDirection=Enum.FillDirection.Horizontal,StartCorner=Enum.StartCorner.TopLeft,
+    Parent=expandFrame
+})
+
+local bossList = {"ApprenticeMiner","SkeletonMiner","CaveGoblin","ExpertMiner","CaveGolem","AxolotlMiner","GorillaMiner","KingMole"}
+for _,boss in ipairs(bossList) do
+    local btn = new("TextButton",{
+        Text=boss,BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=9,Parent=expandFrame
+    })
+    btn.MouseButton1Click:Connect(function()
+        for k in pairs(DarkElfHub.BossLocks) do DarkElfHub.BossLocks[k]=false end
+        DarkElfHub.BossLocks[boss]=true; currentBoss=boss
+        for _,v in ipairs(expandFrame:GetChildren()) do if v:IsA("TextButton") then v.BackgroundColor3=Color3.fromRGB(60,60,60) end end
+        btn.BackgroundColor3=Color3.fromRGB(255,80,80); expandFrame.Visible=false; selectBossBtn.Text="已选: "..boss
+    end)
+end
+selectBossBtn.MouseButton1Click:Connect(function() expandFrame.Visible=not expandFrame.Visible end)
+
+-- Auto Click
+local clickConn
+local function setAutoClick(s)
+    if s then
+        autoClickBtn.Text="Auto Click: ON"; autoClickBtn.BackgroundColor3=Color3.fromRGB(255,80,80)
+        local cnt=0; clickConn=RunSvc.Heartbeat:Connect(function(dt)
+            cnt=cnt+dt; if cnt>=1/12 then cnt=0
+                local svc=game:GetService("ReplicatedStorage").Packages.Knit.Services.ArmWrestleService.RF
+                svc.RequestCritHit:InvokeServer(); svc.RequestClick:InvokeServer(true)
+            end
+        end)
+    else
+        autoClickBtn.Text="Auto Click: OFF"; autoClickBtn.BackgroundColor3=Color3.fromRGB(60,60,60)
+        if clickConn then clickConn:Disconnect(); clickConn=nil end
+    end
+end
+autoClickBtn.MouseButton1Click:Connect(function() setAutoClick(autoClickBtn.Text:find("OFF") and true or false) end)
+
+-- Auto Boss
+local bossConn
+local function setAutoBoss(s)
+    if s then
+        autoBossBtn.Text="Auto Boss: ON"; autoBossBtn.BackgroundColor3=Color3.fromRGB(255,80,80)
+        local cnt=0; bossConn=RunSvc.Heartbeat:Connect(function(dt)
+            cnt=cnt+dt; if cnt>=1/4 then cnt=0
+                if DarkElfHub.BossLocks[currentBoss] then
+                    game:GetService("ReplicatedStorage").Packages.Knit.Services.ArmWrestleService.RF.RequestStartFight:InvokeServer(currentBoss)
+                end
+            end
+        end)
+    else
+        autoBossBtn.Text="Auto Boss: OFF"; autoBossBtn.BackgroundColor3=Color3.fromRGB(60,60,60)
+        if bossConn then bossConn:Disconnect(); bossConn=nil end
+    end
+end
+autoBossBtn.MouseButton1Click:Connect(function() setAutoBoss(autoBossBtn.Text:find("OFF") and true or false) end)
+
+--<<<<<<<<<<<<<<<<  12. Auto Train 页  >>>>>>>>>>>>>>>>>>
+local trainBtn = new("TextButton",{Text="Auto Train: OFF",Size=UDim2.new(0,90,0,18),Position=UDim2.fromOffset(5,25),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=9,Parent=trainTab})
+local trainConn
+local function setAutoTrain(s)
+    if s then
+        trainBtn.Text="Auto Train: ON"; trainBtn.BackgroundColor3=Color3.fromRGB(255,80,80)
+        task.wait(0.5)
+        game:GetService("ReplicatedStorage").Packages.Knit.Services.ToolService.RE.onEquipRequest:FireServer("MinersDreamland","Grips","MiningEvent12")
+        local cnt=0; trainConn=RunSvc.Heartbeat:Connect(function(dt)
+            cnt=cnt+dt; if cnt>=1/5 then cnt=0; game:GetService("ReplicatedStorage").Packages.Knit.Services.ToolService.RE.onClick:FireServer() end
+        end)
+    else
+        trainBtn.Text="Auto Train: OFF"; trainBtn.BackgroundColor3=Color3.fromRGB(60,60,60)
+        if trainConn then trainConn:Disconnect(); trainConn=nil end
+    end
+end
+trainBtn.MouseButton1Click:Connect(function() setAutoTrain(trainBtn.Text:find("OFF") and true or false) end)
+
+--<<<<<<<<<<<<<<<<  13. Auto Egg 页  >>>>>>>>>>>>>>>>>>
+local currentEgg="Mining"
+local eggBtn1=new("TextButton",{Text="Mining",Size=UDim2.new(0,80,0,18),Position=UDim2.fromOffset(5,25),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=9,Parent=eggTab})
+local eggBtn2=new("TextButton",{Text="MiningCrystal",Size=UDim2.new(0,80,0,18),Position=UDim2.fromOffset(90,25),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=9,Parent=eggTab})
+DarkElfHub.EggLocks={Mining=false,MiningCrystal=false}; DarkElfHub.EggLocks[currentEgg]=true; eggBtn1.BackgroundColor3=Color3.fromRGB(255,80,80)
+local function setEggLock(egg)
+    for k in pairs(DarkElfHub.EggLocks) do DarkElfHub.EggLocks[k]=false end
+    DarkElfHub.EggLocks[egg]=true; currentEgg=egg
+    eggBtn1.BackgroundColor3=egg=="Mining" and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    eggBtn2.BackgroundColor3=egg=="MiningCrystal" and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+end
+eggBtn1.MouseButton1Click:Connect(function() setEggLock("Mining") end)
+eggBtn2.MouseButton1Click:Connect(function() setEggLock("MiningCrystal") end)
+
+local autoEggBtn=new("TextButton",{Text="Auto Egg: OFF",Size=UDim2.new(0,90,0,18),Position=UDim2.fromOffset(5,50),BackgroundColor3=Color3.fromRGB(60,60,60),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,TextSize=9,Parent=eggTab})
+local eggConn
+local function setAutoEgg(s)
+    if s then
+        autoEggBtn.Text="Auto Egg: ON"; autoEggBtn.BackgroundColor3=Color3.fromRGB(255,80,80)
+        local cnt=0; eggConn=RunSvc.Heartbeat:Connect(function(dt)
+            cnt=cnt+dt; if cnt>=1/3 then cnt=0
+                if DarkElfHub.EggLocks[currentEgg] then
+                    game:GetService("ReplicatedStorage").Packages.Knit.Services.EggService.RF.purchaseEgg:InvokeServer(currentEgg,true,false)
+                end
+            end
+        end)
+    else
+        autoEggBtn.Text="Auto Egg: OFF"; autoEggBtn.BackgroundColor3=Color3.fromRGB(60,60,60)
+        if eggConn then eggConn:Disconnect(); eggConn=nil end
+    end
+end
+autoEggBtn.MouseButton1Click:Connect(function() setAutoEgg(autoEggBtn.Text:find("OFF") and true or false) end)
+
 
