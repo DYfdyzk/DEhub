@@ -1,5 +1,5 @@
 --========================================================
---  Dark Elf Hub  v3.2  | 350×300 | 完整版 – 不省略
+--  Dark Elf Hub  v3.2  | 350×300 | 完整不省略版
 --========================================================
 local CoreGui = game:GetService("CoreGui")
 local UIS     = game:GetService("UserInputService")
@@ -193,7 +193,324 @@ Player.CharacterAdded:Connect(function(char)
     h.WalkSpeed = ws; h.JumpPower = jp
 end)
 
---<<<<<<<< 9. AWS Event 页 – 完整 Boss / Train / Egg  >>>>>>>>
+--<<<<<<<<  9. Speed 页 – 8Hz Rebirth + 50Hz Gem  >>>>>>>>
+local rowH, gap = 18, 4
+
+-- ① 自动黄球宠 200 Hz（30 s on / 8 s off 循环）
+local yellowBtn = new("TextButton",{
+    Text = "自动黄球宠: OFF", Size = UDim2.new(0,110,0,18),
+    Position = UDim2.fromOffset(5,5), BackgroundColor3 = Color3.fromRGB(60,60,60),
+    TextColor3 = Color3.new(1,1,1), BorderSizePixel = 0, TextSize = 9, Parent = speedTab
+})
+
+local yellowConn, yAcc, cycleTimer = nil, 0, 0
+local CYCLE_ON, CYCLE_OFF = 30, 8   -- 30 秒运行，8 秒停止
+
+local function fire20Yellow()
+    for i = 1,20 do
+        ReplSt.rEvents.orbEvent:FireServer("collectOrb","Yellow Orb","City")
+    end
+end
+
+local function setYellow(s)
+    yellowBtn.Text = s and "自动黄球宠: ON" or "自动黄球宠: OFF"
+    yellowBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if yellowConn then yellowConn:Disconnect(); yellowConn = nil end
+    if s then
+        yAcc, cycleTimer = 0, 0
+        yellowConn = RunSvc.Heartbeat:Connect(function(dt)
+            cycleTimer = cycleTimer + dt
+            -- 30 秒运行期
+            if cycleTimer <= CYCLE_ON then
+                yAcc = yAcc + dt
+                if yAcc >= 1/200 then yAcc = 0; fire20Yellow() end
+            -- 8 秒停止期
+            elseif cycleTimer <= CYCLE_ON + CYCLE_OFF then
+                -- 什么都不做，空转
+            else
+                cycleTimer = 0   -- 重置周期
+            end
+        end)
+    end
+end
+yellowBtn.MouseButton1Click:Connect(function() setYellow(yellowBtn.Text:find("OFF") and true or false) end)
+
+-- ② 自动全球钻 100 Hz（10 连发）
+local allOrbBtn = new("TextButton",{
+    Text="自动全球钻: OFF", Size=UDim2.new(0,110,0,rowH), Position=UDim2.fromOffset(5,5+rowH+gap),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
+})
+local orbConn, oAcc = nil, 0
+local orbs = {"Yellow Orb","Red Orb","Blue Orb","Orange Orb","Ethereal Orb"}
+local areas = {"City","Snow","Magma","Legends Highway"}
+local function fire10All()
+    for _,o in ipairs(orbs) do for _,a in ipairs(areas) do
+        ReplSt.rEvents.orbEvent:FireServer("collectOrb",o,a)
+    end end
+end
+local function setAllOrb(s)
+    allOrbBtn.Text = s and "自动全球钻: ON" or "自动全球钻: OFF"
+    allOrbBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if orbConn then orbConn:Disconnect(); orbConn = nil end
+    if s then
+        oAcc = 0
+        orbConn = RunSvc.Heartbeat:Connect(function(dt)
+            oAcc = oAcc + dt
+            if oAcc >= 1/100 then oAcc = 0; fire10All() end
+        end)
+    end
+end
+allOrbBtn.MouseButton1Click:Connect(function() setAllOrb(allOrbBtn.Text:find("OFF") and true or false) end)
+
+-- 自动购买武士 4 Hz（官方路径版）
+local buyConn, acc = nil, 0
+local buyBtn = new("TextButton",{
+    Text = "自动买武士: OFF", Size = UDim2.new(0,120,0,18),
+    Position = UDim2.fromOffset(5, 5+(18+4)*2),          -- 按需调位置
+    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
+    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
+})
+
+local function setBuy(s)
+    buyBtn.Text = s and "自动买武士: ON" or "自动买武士: OFF"
+    buyBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if buyConn then buyConn:Disconnect(); buyConn = nil end
+    if s then
+        acc = 0
+        buyConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            acc = acc + dt
+            if acc >= 1/4 then
+                acc = 0
+                -- 官方源码路径
+                game:GetService("ReplicatedStorage")
+                      :WaitForChild("cPetShopRemote")
+                      :FireServer(game:GetService("ReplicatedStorage")
+                                 :WaitForChild("cPetShopFolder")["Swift Samurai"])
+            end
+        end)
+    end
+end
+buyBtn.MouseButton1Click:Connect(function() setBuy(buyBtn.Text:find("OFF") and true or false) end)
+
+-- 自动进阶武士 4 Hz（官方路径版）
+local evolveConn, acc = nil, 0
+local evolveBtn = new("TextButton",{
+    Text = "自动进阶武士: OFF", Size = UDim2.new(0,120,0,18),
+    Position = UDim2.fromOffset(5, 5+(18+4)*3),   -- 按需调位置
+    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
+    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
+})
+
+local function setEvolve(s)
+    evolveBtn.Text = s and "自动进阶武士: ON" or "自动进阶武士: OFF"
+    evolveBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if evolveConn then evolveConn:Disconnect(); evolveConn = nil end
+    if s then
+        acc = 0
+        evolveConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            acc = acc + dt
+            if acc >= 1/4 then
+                acc = 0
+                -- 官方源码路径
+                game:GetService("ReplicatedStorage")
+                      :WaitForChild("rEvents")
+                      :WaitForChild("petEvolveEvent")
+                      :FireServer("evolvePet","Swift Samurai")
+            end
+        end)
+    end
+end
+evolveBtn.MouseButton1Click:Connect(function() setEvolve(evolveBtn.Text:find("OFF") and true or false) end)
+
+-- ⑤ 自动重生 8 Hz（125 ms）
+local rebirthBtn = new("TextButton",{
+    Text="Auto Rebirth: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*4),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
+})
+local rebirthConn, rAcc = nil, 0
+local function setAutoRebirth(s)
+    rebirthBtn.Text = s and "Auto Rebirth: ON" or "Auto Rebirth: OFF"
+    rebirthBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if rebirthConn then rebirthConn:Disconnect(); rebirthConn = nil end
+    if s then
+        rAcc = 0
+        rebirthConn = RunSvc.Heartbeat:Connect(function(dt)
+            rAcc = rAcc + dt
+            if rAcc >= 0.125 then rAcc = 0; ReplSt.rEvents.rebirthEvent:FireServer("rebirthRequest") end
+        end)
+    end
+end
+rebirthBtn.MouseButton1Click:Connect(function() setAutoRebirth(rebirthBtn.Text:find("OFF") and true or false) end)
+
+-- ⑥ 自动 Gem 50 Hz（20 ms）
+local gemBtn = new("TextButton",{
+    Text="Auto Gem: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*5),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
+})
+local gemConn, gAcc = nil, 0
+local gemArgs = {"collectOrb","Gem","City"}
+local function setAutoGem(s)
+    gemBtn.Text = s and "Auto Gem: ON" or "Auto Gem: OFF"
+    gemBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if gemConn then gemConn:Disconnect(); gemConn = nil end
+    if s then
+        gAcc = 0
+        gemConn = RunSvc.Heartbeat:Connect(function(dt)
+            gAcc = gAcc + dt
+            if gAcc >= 0.02 then gAcc = 0; ReplSt.rEvents.orbEvent:FireServer(unpack(gemArgs)) end
+        end)
+    end
+end
+gemBtn.MouseButton1Click:Connect(function() setAutoGem(gemBtn.Text:find("OFF") and true or false) end)
+
+--<<<<<<<< 10. AWS Event 页 – 完整 Boss / Train / Egg  >>>>>>>>
+
+-- ① Auto Boss 按钮 → 整窗切换 Boss 子页
+local autoBossMainBtn = new("TextButton",{
+    Text="Auto Boss", Size=UDim2.new(0,80,0,22), Position=UDim2.fromScale(0.5,0.25), AnchorPoint=Vector2.new(0.5,0.5),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=10, Parent=awsTab
+})
+
+-- Boss 专属子页（覆盖整窗，初始隐藏）
+local bossSubPage = new("Frame",{
+    Size=UDim2.new(1,0,1,0), BackgroundColor3=Hub.Theme.WinBg, BorderSizePixel=0, Visible=false, Parent=Hub.Instances.Window
+})
+new("UICorner",{CornerRadius=UDim.new(0,6),Parent=bossSubPage})
+new("UIStroke",{Thickness=2,Color=Hub.Theme.Stroke,Parent=bossSubPage})
+
+local subTitle = new("TextLabel",{Text="Boss 设置",TextSize=10,Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,TextColor3=Color3.new(1,1,1),Parent=bossSubPage})
+local backBtn = new("TextButton",{Text="✕", Size=UDim2.fromOffset(18,18), Position=UDim2.new(1,-20,0,2), BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), TextSize=14, Parent=bossSubPage})
+
+autoBossMainBtn.MouseButton1Click:Connect(function()
+    for _,tab in ipairs(Hub.Tabs) do tab.Content.Visible=false end
+    Hub.Instances.TabBar.Parent.Visible=false
+    bossSubPage.Visible=true
+end)
+backBtn.MouseButton1Click:Connect(function()
+    bossSubPage.Visible=false
+    Hub.Instances.TabBar.Parent.Visible=true
+    Hub:SwitchTab(Hub.Tabs[3]) -- 回到 AWS Event
+end)
+
+-- Boss 子页内容（3×3 加长按钮，字体6）
+local currentBoss = "ApprenticeMiner"
+Hub.BossLocks[currentBoss]=true
+
+local leftBoss = new("Frame",{Size=UDim2.new(0,90,0,120), Position=UDim2.fromOffset(5,25), BackgroundTransparency=1, Parent=bossSubPage})
+new("UIListLayout",{Padding=UDim.new(0,6),Parent=leftBoss})
+
+local selectBossBtn = new("TextButton",{Text="选择 Boss", Size=UDim2.new(0,80,0,20), BackgroundColor3=Color3Heartbeat:Connect(function(dt)
+            oAcc = oAcc + dt
+            if oAcc >= 1/100 then oAcc = 0; fire10All() end
+        end)
+    end
+end
+allOrbBtn.MouseButton1Click:Connect(function() setAllOrb(allOrbBtn.Text:find("OFF") and true or false) end)
+
+-- 自动购买武士 4 Hz（官方路径版）
+local buyConn, acc = nil, 0
+local buyBtn = new("TextButton",{
+    Text = "自动买武士: OFF", Size = UDim2.new(0,120,0,18),
+    Position = UDim2.fromOffset(5, 5+(18+4)*2),          -- 按需调位置
+    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
+    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
+})
+
+local function setBuy(s)
+    buyBtn.Text = s and "自动买武士: ON" or "自动买武士: OFF"
+    buyBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if buyConn then buyConn:Disconnect(); buyConn = nil end
+    if s then
+        acc = 0
+        buyConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            acc = acc + dt
+            if acc >= 1/4 then
+                acc = 0
+                -- 官方源码路径
+                game:GetService("ReplicatedStorage")
+                      :WaitForChild("cPetShopRemote")
+                      :FireServer(game:GetService("ReplicatedStorage")
+                                 :WaitForChild("cPetShopFolder")["Swift Samurai"])
+            end
+        end)
+    end
+end
+buyBtn.MouseButton1Click:Connect(function() setBuy(buyBtn.Text:find("OFF") and true or false) end)
+
+-- 自动进阶武士 4 Hz（官方路径版）
+local evolveConn, acc = nil, 0
+local evolveBtn = new("TextButton",{
+    Text = "自动进阶武士: OFF", Size = UDim2.new(0,120,0,18),
+    Position = UDim2.fromOffset(5, 5+(18+4)*3),   -- 按需调位置
+    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
+    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
+})
+
+local function setEvolve(s)
+    evolveBtn.Text = s and "自动进阶武士: ON" or "自动进阶武士: OFF"
+    evolveBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if evolveConn then evolveConn:Disconnect(); evolveConn = nil end
+    if s then
+        acc = 0
+        evolveConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            acc = acc + dt
+            if acc >= 1/4 then
+                acc = 0
+                -- 官方源码路径
+                game:GetService("ReplicatedStorage")
+                      :WaitForChild("rEvents")
+                      :WaitForChild("petEvolveEvent")
+                      :FireServer("evolvePet","Swift Samurai")
+            end
+        end)
+    end
+end
+evolveBtn.MouseButton1Click:Connect(function() setEvolve(evolveBtn.Text:find("OFF") and true or false) end)
+
+
+-- ⑤ 自动重生 8 Hz（125 ms）
+local rebirthBtn = new("TextButton",{
+    Text="Auto Rebirth: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*4),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
+})
+local rebirthConn, rAcc = nil, 0
+local function setAutoRebirth(s)
+    rebirthBtn.Text = s and "Auto Rebirth: ON" or "Auto Rebirth: OFF"
+    rebirthBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if rebirthConn then rebirthConn:Disconnect(); rebirthConn = nil end
+    if s then
+        rAcc = 0
+        rebirthConn = RunSvc.Heartbeat:Connect(function(dt)
+            rAcc = rAcc + dt
+            if rAcc >= 0.125 then rAcc = 0; ReplSt.rEvents.rebirthEvent:FireServer("rebirthRequest") end
+        end)
+    end
+end
+rebirthBtn.MouseButton1Click:Connect(function() setAutoRebirth(rebirthBtn.Text:find("OFF") and true or false) end)
+
+-- ⑥ 自动 Gem 50 Hz（20 ms）
+local gemBtn = new("TextButton",{
+    Text="Auto Gem: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*5),
+    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
+})
+local gemConn, gAcc = nil, 0
+local gemArgs = {"collectOrb","Gem","City"}
+local function setAutoGem(s)
+    gemBtn.Text = s and "Auto Gem: ON" or "Auto Gem: OFF"
+    gemBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
+    if gemConn then gemConn:Disconnect(); gemConn = nil end
+    if s then
+        gAcc = 0
+        gemConn = RunSvc.Heartbeat:Connect(function(dt)
+            gAcc = gAcc + dt
+            if gAcc >= 0.02 then gAcc = 0; ReplSt.rEvents.orbEvent:FireServer(unpack(gemArgs)) end
+        end)
+    end
+end
+gemBtn.MouseButton1Click:Connect(function() setAutoGem(gemBtn.Text:find("OFF") and true or false) end)
+
+--<<<<<<<< 10. AWS Event 页 – 完整 Boss / Train / Egg  >>>>>>>>
+
 -- ① Auto Boss 按钮 → 整窗切换 Boss 子页
 local autoBossMainBtn = new("TextButton",{
     Text="Auto Boss", Size=UDim2.new(0,80,0,22), Position=UDim2.fromScale(0.5,0.25), AnchorPoint=Vector2.new(0.5,0.5),
@@ -340,174 +657,3 @@ local function setAutoEgg(s)
     end
 end
 autoEggBtn.MouseButton1Click:Connect(function() setAutoEgg(autoEggBtn.Text:find("OFF") and true or false) end)
-
---<<<<<<<<  9. Speed 页 – 8Hz Rebirth + 50Hz Gem  >>>>>>>>
-local rowH, gap = 18, 4
-
--- 自动黄球宠 200 Hz（30 s on / 8 s off 循环）
-local yellowBtn = new("TextButton",{
-    Text = "自动黄球宠: OFF", Size = UDim2.new(0,110,0,18),
-    Position = UDim2.fromOffset(5,5), BackgroundColor3 = Color3.fromRGB(60,60,60),
-    TextColor3 = Color3.new(1,1,1), BorderSizePixel = 0, TextSize = 9, Parent = speedTab
-})
-
-local yellowConn, yAcc, cycleTimer = nil, 0, 0
-local CYCLE_ON, CYCLE_OFF = 30, 8   -- 30 秒运行，8 秒停止
-
-local function fire20Yellow()
-    for i = 1,20 do
-        ReplSt.rEvents.orbEvent:FireServer("collectOrb","Yellow Orb","City")
-    end
-end
-
-local function setYellow(s)
-    yellowBtn.Text = s and "自动黄球宠: ON" or "自动黄球宠: OFF"
-    yellowBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if yellowConn then yellowConn:Disconnect(); yellowConn = nil end
-    if s then
-        yAcc, cycleTimer = 0, 0
-        yellowConn = RunSvc.Heartbeat:Connect(function(dt)
-            cycleTimer = cycleTimer + dt
-            -- 30 秒运行期
-            if cycleTimer <= CYCLE_ON then
-                yAcc = yAcc + dt
-                if yAcc >= 1/200 then yAcc = 0; fire20Yellow() end
-            -- 8 秒停止期
-            elseif cycleTimer <= CYCLE_ON + CYCLE_OFF then
-                -- 什么都不做，空转
-            else
-                cycleTimer = 0   -- 重置周期
-            end
-        end)
-    end
-end
-yellowBtn.MouseButton1Click:Connect(function() setYellow(yellowBtn.Text:find("OFF") and true or false) end)
-
--- ② 自动全球钻 100 Hz（10 连发）
-local allOrbBtn = new("TextButton",{
-    Text="自动全球钻: OFF", Size=UDim2.new(0,110,0,rowH), Position=UDim2.fromOffset(5,5+rowH+gap),
-    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
-})
-local orbConn, oAcc = nil, 0
-local orbs = {"Ethereal Orb"}
-local areas = {"City","Snow","Magma","Legends Highway"}
-local function fire10All()
-    for _,o in ipairs(orbs) do for _,a in ipairs(areas) do
-        ReplSt.rEvents.orbEvent:FireServer("collectOrb",o,a)
-    end end
-end
-local function setAllOrb(s)
-    allOrbBtn.Text = s and "自动全球钻: ON" or "自动全球钻: OFF"
-    allOrbBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if orbConn then orbConn:Disconnect(); orbConn = nil end>
-    if s then
-        oAcc = 0
-        orbConn = RunSvc.Heartbeat:Connect(function(dt)
-            oAcc = oAcc + dt
-            if oAcc >= 1/100 then oAcc = 0; fire10All() end
-        end)
-    end
-end
-allOrbBtn.MouseButton1Click:Connect(function() setAllOrb(allOrbBtn.Text:find("OFF") and true or false) end)
-
--- 自动购买武士 4 Hz（官方路径版）
-local buyConn, acc = nil, 0
-local buyBtn = new("TextButton",{
-    Text = "自动买武士: OFF", Size = UDim2.new(0,120,0,18),
-    Position = UDim2.fromOffset(5, 5+(18+4)*2),          -- 按需调位置
-    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
-    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
-})
-
-local function setBuy(s)
-    buyBtn.Text = s and "自动买武士: ON" or "自动买武士: OFF"
-    buyBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if buyConn then buyConn:Disconnect(); buyConn = nil end
-    if s then
-        acc = 0
-        buyConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
-            acc = acc + dt
-            if acc >= 1/10 then
-                acc = 0
-                -- 官方源码路径
-                game:GetService("ReplicatedStorage")
-                      :WaitForChild("cPetShopRemote")
-                      :FireServer(game:GetService("ReplicatedStorage")
-                                 :WaitForChild("cPetShopFolder")["Swift Samurai"])
-            end
-        end)
-    end
-end
-buyBtn.MouseButton1Click:Connect(function() setBuy(buyBtn.Text:find("OFF") and true or false) end)
-
--- 自动进阶武士 4 Hz（官方路径版）
-local evolveConn, acc = nil, 0
-local evolveBtn = new("TextButton",{
-    Text = "自动进阶武士: OFF", Size = UDim2.new(0,120,0,18),
-    Position = UDim2.fromOffset(5, 5+(18+4)*3),   -- 按需调位置
-    BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1),
-    BorderSizePixel = 0, TextSize = 9, Parent = speedTab
-})
-
-local function setEvolve(s)
-    evolveBtn.Text = s and "自动进阶武士: ON" or "自动进阶武士: OFF"
-    evolveBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if evolveConn then evolveConn:Disconnect(); evolveConn = nil end
-    if s then
-        acc = 0
-        evolveConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
-            acc = acc + dt
-            if acc >= 1/4 then
-                acc = 0
-                -- 官方源码路径
-                game:GetService("ReplicatedStorage")
-                      :WaitForChild("rEvents")
-                      :WaitForChild("petEvolveEvent")
-                      :FireServer("evolvePet","Swift Samurai")
-            end
-        end)
-    end
-end
-evolveBtn.MouseButton1Click:Connect(function() setEvolve(evolveBtn.Text:find("OFF") and true or false) end)
-
-
--- ⑤ 自动重生 8 Hz（125 ms）
-local rebirthBtn = new("TextButton",{
-    Text="Auto Rebirth: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*4),
-    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
-})
-local rebirthConn, rAcc = nil, 0
-local function setAutoRebirth(s)
-    rebirthBtn.Text = s and "Auto Rebirth: ON" or "Auto Rebirth: OFF"
-    rebirthBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if rebirthConn then rebirthConn:Disconnect(); rebirthConn = nil end
-    if s then
-        rAcc = 0
-        rebirthConn = RunSvc.Heartbeat:Connect(function(dt)
-            rAcc = rAcc + dt
-            if rAcc >= 0.125 then rAcc = 0; ReplSt.rEvents.rebirthEvent:FireServer("rebirthRequest") end
-        end)
-    end
-end
-rebirthBtn.MouseButton1Click:Connect(function() setAutoRebirth(rebirthBtn.Text:find("OFF") and true or false) end)
-
--- ⑥ 自动 Gem 50 Hz（20 ms）
-local gemBtn = new("TextButton",{
-    Text="Auto Gem: OFF", Size=UDim2.new(0,120,0,rowH), Position=UDim2.fromOffset(5,5+(rowH+gap)*5),
-    BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1), BorderSizePixel=0, TextSize=9, Parent=speedTab
-})
-local gemConn, gAcc = nil, 0
-local gemArgs = {"collectOrb","Gem","City"}
-local function setAutoGem(s)
-    gemBtn.Text = s and "Auto Gem: ON" or "Auto Gem: OFF"
-    gemBtn.BackgroundColor3 = s and Color3.fromRGB(255,80,80) or Color3.fromRGB(60,60,60)
-    if gemConn then gemConn:Disconnect(); gemConn = nil end
-    if s then
-        gAcc = 0
-        gemConn = RunSvc.Heartbeat:Connect(function(dt)
-            gAcc = gAcc + dt
-            if gAcc >= 0.01 then gAcc = 0; ReplSt.rEvents.orbEvent:FireServer(unpack(gemArgs)) end
-        end)
-    end
-end
-gemBtn.MouseButton1Click:Connect(function() setAutoGem(gemBtn.Text:find("OFF") and true or false) end)
